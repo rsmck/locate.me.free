@@ -1,0 +1,58 @@
+<html>
+<head>
+  <title>locate.me.free</title>
+  <link rel="stylesheet" href="leaflet.css" />
+  <script src="leaflet.js"></script>
+  <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; background-color: #000; }
+    #map { width: 100%; height: 100%; background-color: #000; z-index: 10; }
+    .leaflet-popup-tip { width: 0px; height: 0px; }
+    .leaflet-tile-pane { opacity: 0.6; } /* horrible hack to dim map */
+    #info { z-index: 100; position: absolute; left: 0; top: 0; border 3px solid #000; background: #fff; padding: 1em; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+<div id="info"></div>
+<div id="map"></div>
+<script>
+var map = L.map('map', {zoomControl: false}).setView([54.5,-3], 6);
+var marker = null;
+var markerrange = 0;
+
+L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+   useCache: true,
+   maxZoom: 12,
+   attribution: 'Location Demo | Map &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+var peer = new Peer();
+
+peer.on('open', function(id) {
+  document.getElementById('info').innerHTML = 'Send this URL: http://example.com/#'+id;
+});
+
+peer.on('connection', function (conn) {
+   console.log("Connected to: " + conn.peer);
+   conn.on('data', function (data) {
+      pos = JSON.parse(data);
+      if (marker === null) {
+         marker = L.marker([pos.lat, pos.lon], {});
+         marker.bindTooltip(pos.lat.toFixed(6) + '<br/>' + pos.lon.toFixed(6), { permanent: true });
+         marker.addTo(map);
+         var thisLocation = marker.getLatLng();
+         map.flyTo(thisLocation, 11, {duration: 2});
+         if (parseInt(pos.acc) > 0) {
+            markerrange = L.circle([pos.lat, pos.lon], {radius: pos.acc}).addTo(map);
+         }
+      } else {
+         marker.moveTo([pos.lat, pos.lon]).update();
+         if (parseInt(pos.acc) > 0) {
+            markerrage.moveTo([pos.lat, pos.lon]).setRadius(pos.acc).update();
+         }
+      }
+   });
+});
+</script>
+</body>
+</html>

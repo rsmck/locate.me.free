@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Locate Me</title>
+    </head>
+    <style type="text/css">
+        * { font-family: sans-serif; border: 0; margin: 0; }
+        body { border: 0; margin: 0; padding: 0; }
+        #status { width: 100%; padding: 0.5em; font-size: 3em; }
+        #status.blue { color: #000; background-color: #5bc0de; }
+        #status.red { color: #fff; background-color: #c9302c; }
+        #status.amber { color: #fff; background-color: #d58512; }
+        #status.green { color: #fff; background-color: #449d44; }
+        #instructions p { font-size: 3em; margin: 1.5em 1em; }
+        #locate { display: block; font-size: 3em; font-weight: bold; border: 2px solid #000; margin: 1em 2em 0 2em; padding: 2em; }
+        #location { display: none; }
+        #location p { font-size: 4em; margin: 1.5em 1em; }
+        #lat, #lon, #osg { font-size: 1em; font-weight: bold; }
+    </style>
+    <body>
+        <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+        <script src="geotools.js"></script>
+        <div id="status" class="blue">Waiting for Permission</div>
+        <div id="instructions">
+            <p>Your device will request permission to access your location, and then transmit your location to the person who sent you this link.</p>
+            <p>This is a proof of concept and is not intended for real-world emergency use</p>
+            <p>If you wish to continue press <strong>Locate Me</strong> below.</p>
+            <center><button id="locate">Locate Me</button></center>
+        </div>
+        <div id="location">
+            <p>You have been located and your location has been sent.</p>
+            <p>If you keep this web page open it will refine your location and retransmit as accuracy approves</p>
+            <p>Latitude: <span id="lat"></span></p>
+            <p>Longitude: <span id="lon"></span></p>
+        </div>
+        <script type="text/javascript">
+            var peer = null;
+            var conn = null;
+            var pos = null;
+            var located = false;
+            var connected = false;
+            var txok = false;
+
+            if (!location.hash.substring(1).match(/^[0-9a-f]{8}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{12}$/g)) {
+                setStatus('red', 'Invalid Link');
+                document.getElementById("instructions").style.display = "none";
+            }
+
+            function init() {
+                peer = new Peer();
+                peer.on('open', function (id) { });
+                peer.on('disconnected', function () {
+                    setStatus('red', "Lost Connection");
+                    connected = false;
+                });
+                peer.on('error', function (err) {
+                    setStatus('red', "Lost Connection");
+                    connected = false;
+                });
+                peer.on('close', function() {
+                    setStatus('red', "Lost Connection");
+                    connected = false;
+                });
+            };
+
+            function start() {
+                getLocation();
+                    conn = peer.connect(location.hash.substring(1), { reliable: true });
+                    conn.on('open', function () {
+                        setStatus('amber', "Connected");
+                        connected = true;
+                        txLocation();
+                    });
+                    conn.on('close', function () {
+                        setStatus('red', "Lost Connection");
+                        connected = false;
+                    });
+                };
+
+            function getLocation() {
+                if (navigator.geolocation) {
+                    if (!located) { setStatus('amber', "Locating You"); }
+                    navigator.geolocation.getCurrentPosition(showLocation);
+                } else {
+                    setStatus('red', "Incompatible Device");
+                }
+            }
+
+            function showLocation(position) {
+                pos = { lat: position.coords.latitude, lon: position.coords.longitude, acc: position.coords.accuracy }
+                located = true;
+                document.getElementById("lat").innerHTML = pos.lat.toFixed(4);
+                document.getElementById("lon").innerHTML = pos.lon.toFixed(4);
+                document.getElementById("instructions").style.display = "none";
+                document.getElementById("location").style.display = "block";
+            }
+
+            function setStatus(setclass, text) {
+                document.getElementById("status").setAttribute('class', setclass);
+                document.getElementById("status").innerHTML = text;
+            }
+
+            function txLocation() {
+                if (connected && located) {
+                    conn.send(JSON.stringify(pos));
+                    if (parseInt(pos.acc) > 30) {
+                        setTimeout(getLocation, 3000);
+                        setTimeout(txLocation, 5000);
+                    }
+                    txok = true;
+                    setStatus('green', "Location Sent!");
+                } else {
+                    setTimeout(txLocation, 1000);
+                }
+            }
+
+            var btnLocate = document.getElementById("locate");
+            btnLocate.addEventListener('click', start);
+
+            init();
+        </script>
+    </body>
+</html>
